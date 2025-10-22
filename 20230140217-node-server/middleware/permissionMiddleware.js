@@ -3,7 +3,7 @@
    req.user = {
      id: 123,
      nama: 'Asti Nurul Utami',
-     role: 'user'
+     role: 'admin'
    };
    next(); 
  };
