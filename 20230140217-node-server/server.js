@@ -20,6 +20,9 @@ app.get("/", (req, res) => {
   res.send("Home Page for API");
 });
 const ruteBuku = require("./routes/books");
+app.use("/api/presensi", require("./routes/presensi"));
+
+
 app.use("/api/books", ruteBuku);
 app.use("/api/presensi", presensiRoutes);
 app.use("/api/reports", reportRoutes);
