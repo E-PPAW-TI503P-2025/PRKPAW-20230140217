@@ -31,9 +31,12 @@ fs
     db[model.name] = model;
   });
 
+// models/index.js
+
 Object.keys(db).forEach(modelName => {
+  console.log('MODEL TERDAFTAR:', modelName);
   if (db[modelName].associate) {
-    db[modelName].associate(db);
+    db[modelName].associate(db); // Ini akan memanggil fungsi associate di User dan Presensi
   }
 });
 

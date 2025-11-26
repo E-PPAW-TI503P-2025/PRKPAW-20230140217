@@ -1,39 +1,41 @@
-const { Presensi } = require("../models");
+const { Presensi, User } = require("../models");
 const { Op } = require("sequelize");
 
+const { format } = require("date-fns-tz");
+
+// --- LAPORAN HARI INI
 exports.getDailyReport = async (req, res) => {
-  try {
-    const { nama, tanggalMulai, tanggalSelesai } = req.query;
+    try {
+        const userId = req.user.id;
 
-    let options = { where: {} };
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
 
-    // Filter berdasarkan nama (jika dikirim)
-    if (nama) {
-      options.where.nama = {
-        [Op.like]: `%${nama}%`,
-      };
+        const tomorrow = new Date(today);
+        tomorrow.setDate(tomorrow.getDate() + 1);
+
+        const presensi = await Presensi.findAll({
+            where: {
+                userId,
+                createdAt: {
+                    [Op.between]: [today, tomorrow]
+                }
+            },
+            order: [["createdAt", "DESC"]]
+        });
+
+        return res.status(200).json({
+            message: "Laporan harian berhasil diambil",
+            data: presensi
+        });
+
+    } catch (error) {
+        console.error("Error getDailyReport:", error);
+
+        return res.status(500).json({
+            message: "Terjadi kesalahan pada server",
+            error: error.message
+        });
     }
-
-    // Filter berdasarkan rentang tanggal (jika dua-duanya dikirim)
-    if (tanggalMulai && tanggalSelesai) {
-      options.where.createdAt = {
-        [Op.between]: [
-          new Date(tanggalMulai),
-          new Date(tanggalSelesai)
-        ],
-      };
-    }
-
-    const records = await Presensi.findAll(options);
-
-    res.json({
-      reportDate: new Date().toLocaleDateString(),
-      data: records,
-    });
-  } catch (error) {
-    res.status(500).json({
-      message: "Gagal mengambil laporan",
-      error: error.message,
-    });
-  }
 };
+

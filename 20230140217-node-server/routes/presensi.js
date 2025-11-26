@@ -2,44 +2,56 @@ const express = require("express");
 const router = express.Router();
 const { body, query, param } = require("express-validator");
 const presensiController = require("../controllers/presensiController");
-const authMiddleware = require("../middleware/authMiddleware");
+const { verifyToken } = require("../middleware/authMiddleware");
 
-// ✅ GET LAPORAN HARI INI / SEMUA DATA PRESENSI
-router.get("/", presensiController.getDailyReport);
+// --- LAPORAN (HARUS LOGIN)
+router.get(
+    "/",
+    verifyToken,
+    presensiController.getDailyReport
+);
 
-// ✅ SEARCH BERDASARKAN NAMA
 router.get(
     "/by-name",
-    [query("nama").notEmpty().withMessage("Parameter 'nama' diperlukan")],
+    verifyToken,
+    query("nama").notEmpty().withMessage("Parameter 'nama' diperlukan"),
     presensiController.searchByNama
 );
 
-// ✅ SEARCH BERDASARKAN TANGGAL
 router.get(
     "/by-date",
-    [query("tanggal").notEmpty().withMessage("Parameter 'tanggal' diperlukan")],
+    verifyToken,
+    query("tanggal").notEmpty().withMessage("Parameter 'tanggal' diperlukan"),
     presensiController.searchByTanggal
 );
 
-// ✅ CHECK-IN (JWT required)
-router.post("/check-in", authMiddleware.verifyToken, presensiController.CheckIn);
+// --- CHECK-IN & CHECK-OUT
+router.post(
+    "/check-in",
+    verifyToken,
+    presensiController.CheckIn
+);
 
-// ✅ CHECK-OUT (JWT required)
-router.post("/check-out", authMiddleware.verifyToken, presensiController.CheckOut);
+router.post(
+    "/check-out",
+    verifyToken,
+    presensiController.CheckOut
+);
 
-// ✅ UPDATE PRESENSI
+// --- UPDATE PRESENSI
 router.put(
     "/:id",
-    [
-        param("id").isInt().withMessage("Parameter 'id' harus berupa angka"),
-        body("checkIn").optional().isISO8601().withMessage("checkIn harus format ISO8601"),
-        body("checkOut").optional().isISO8601().withMessage("checkOut harus format ISO8601"),
-        body("nama").optional().isString().withMessage("nama harus string")
-    ],
+    verifyToken,
+    param("id").isInt().withMessage("Parameter 'id' harus angka"),
     presensiController.updatePresensi
 );
 
-// ✅ DELETE PRESENSI
-router.delete("/:id", presensiController.deletePresensi);
+// --- DELETE PRESENSI
+router.delete(
+    "/:id",
+    verifyToken,
+    presensiController.deletePresensi
+);
+
 
 module.exports = router;
