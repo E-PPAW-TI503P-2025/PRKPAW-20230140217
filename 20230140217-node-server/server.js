@@ -5,6 +5,7 @@ require('dotenv').config();
 const express = require("express");
 const cors = require("cors");
 const morgan = require("morgan");
+const path = require('path'); 
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -15,10 +16,12 @@ const reportRoutes = require("./routes/reports");
 const authRoutes = require("./routes/auth");
 const ruteBuku = require("./routes/books");
 
+
 // Middleware
 app.use(cors()); // <-- CUKUP GUNAKAN INI UNTUK MENANGANI CORS DAN OPTIONS
 app.use(express.json());
 app.use(morgan("dev"));
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 app.get("/", (req, res) => {
   res.send("Home Page for API");

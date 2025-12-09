@@ -1,11 +1,32 @@
 const { Presensi, User } = require("../models");
 const { Op } = require("sequelize");
 const { format } = require("date-fns-tz");
+const multer = require("multer");
+const path = require("path");
 
 const timeZone = "Asia/Jakarta";
 
 // =======================
-// CHECK-IN (PERBAIKAN: Menambahkan filter tanggal)
+// Multer setup untuk upload foto
+// =======================
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    cb(null, "uploads/"); // folder uploads harus sudah ada
+  },
+  filename: (req, file, cb) => {
+    cb(null, `${req.user.id}-${Date.now()}${path.extname(file.originalname)}`);
+  },
+});
+
+const fileFilter = (req, file, cb) => {
+  if (file.mimetype.startsWith("image/")) cb(null, true);
+  else cb(new Error("Hanya file gambar yang diperbolehkan!"), false);
+};
+
+exports.upload = multer({ storage, fileFilter });
+
+// =======================
+// CHECK-IN
 // =======================
 exports.CheckIn = async (req, res) => {
   try {
@@ -13,16 +34,21 @@ exports.CheckIn = async (req, res) => {
     const waktuSekarang = new Date();
     const { latitude, longitude } = req.body;
 
-    // Tentukan awal hari ini untuk filter
+    if (!req.file) {
+      return res.status(400).json({ message: "Foto wajib diambil sebelum check-in!" });
+    }
+
+    const buktiFoto = req.file.filename; // Hanya filename
+
     const startOfDay = new Date(waktuSekarang);
-    startOfDay.setHours(0, 0, 0, 0); 
+    startOfDay.setHours(0, 0, 0, 0);
 
     const existingRecord = await Presensi.findOne({
-      where: { 
-          userId, 
-          checkOut: null,
-          checkIn: { [Op.gte]: startOfDay } // Hanya cek record yang check-in HARI INI
-      }
+      where: {
+        userId,
+        checkOut: null,
+        checkIn: { [Op.gte]: startOfDay },
+      },
     });
 
     if (existingRecord) {
@@ -34,6 +60,7 @@ exports.CheckIn = async (req, res) => {
       checkIn: waktuSekarang,
       latitude: latitude || null,
       longitude: longitude || null,
+      buktiFoto, // simpan hanya filename
     });
 
     res.status(201).json({
@@ -42,37 +69,36 @@ exports.CheckIn = async (req, res) => {
         "HH:mm:ss",
         { timeZone }
       )} WIB`,
-      data: newRecord
+      data: newRecord,
     });
   } catch (error) {
+    console.error("Check-in error:", error);
     res.status(500).json({ message: "Server error", error: error.message });
   }
 };
 
+
 // =======================
-// CHECK-OUT (PERBAIKAN: Menambahkan filter tanggal)
+// CHECK-OUT
 // =======================
 exports.CheckOut = async (req, res) => {
   try {
     const { id: userId, nama: userName } = req.user;
     const waktuSekarang = new Date();
-    
-    // Tentukan awal hari ini untuk filter
+
     const startOfDay = new Date(waktuSekarang);
     startOfDay.setHours(0, 0, 0, 0);
 
     const record = await Presensi.findOne({
-      where: { 
-          userId, 
-          checkOut: null,
-          checkIn: { [Op.gte]: startOfDay } // Hanya proses record yang check-in HARI INI
-      }
+      where: {
+        userId,
+        checkOut: null,
+        checkIn: { [Op.gte]: startOfDay },
+      },
     });
 
     if (!record) {
-      return res.status(404).json({
-        message: "Tidak ada catatan check-in aktif hari ini."
-      });
+      return res.status(404).json({ message: "Tidak ada catatan check-in aktif hari ini." });
     }
 
     record.checkOut = waktuSekarang;
@@ -84,52 +110,36 @@ exports.CheckOut = async (req, res) => {
         "HH:mm:ss",
         { timeZone }
       )} WIB`,
-      data: record
+      data: record,
     });
   } catch (error) {
+    console.error("Check-out error:", error);
     res.status(500).json({ message: "Server error", error: error.message });
   }
 };
 
 // =======================
-// GET DAILY REPORT ALL USER (FIXED: Menggunakan [Op.between] yang robust)
+// GET DAILY REPORT
 // =======================
 exports.getDailyReport = async (req, res) => {
   try {
     const today = new Date();
-    
-    // Tentukan awal hari ini (00:00:00)
     const startOfDay = new Date(today);
     startOfDay.setHours(0, 0, 0, 0);
-
-    // Tentukan akhir hari ini (23:59:59.999)
     const endOfDay = new Date(today);
     endOfDay.setHours(23, 59, 59, 999);
-    
-   // Di exports.getDailyReport
-// Uji coba ini jika error 500 masih muncul
+
     const data = await Presensi.findAll({
       where: {
-        checkIn: {
-          // [Op.between] terkadang sensitif terhadap tipe data/timezone.
-          // Coba gunakan Op.gte dan Op.lte secara terpisah untuk debugging.
-          [Op.gte]: startOfDay, 
-          [Op.lte]: endOfDay 
-        }
+        checkIn: { [Op.gte]: startOfDay, [Op.lte]: endOfDay },
       },
-      include: [{ model: User, attributes: ["nama", "email"], as: 'user' }]
+      include: [{ model: User, attributes: ["nama", "email"], as: "user" }],
     });
 
-    res.json({
-      message: "Laporan presensi hari ini",
-      data
-    });
+    res.json({ message: "Laporan presensi hari ini", data });
   } catch (err) {
-    console.error("Error fetching daily report:", err); 
-    res.status(500).json({ 
-        message: "Gagal memuat laporan presensi.", 
-        error: err.message 
-    });
+    console.error("Error fetching daily report:", err);
+    res.status(500).json({ message: "Gagal memuat laporan presensi.", error: err.message });
   }
 };
 
@@ -141,21 +151,17 @@ exports.searchByNama = async (req, res) => {
     const { nama } = req.query;
 
     const data = await Presensi.findAll({
-    include: [{
-        model: User,
-        // TAMBAHKAN as: 'user'
-        where: {
-        nama: { [Op.like]: `%${nama}%` }
+      include: [
+        {
+          model: User,
+          where: { nama: { [Op.like]: `%${nama}%` } },
+          attributes: ["nama", "email"],
+          as: "user",
         },
-        attributes: ["nama", "email"],
-        as: 'user' 
-    }]
+      ],
     });
 
-    res.json({
-      message: `Hasil pencarian nama: ${nama}`,
-      data
-    });
+    res.json({ message: `Hasil pencarian nama: ${nama}`, data });
   } catch (err) {
     res.status(500).json({ message: "Server error", error: err.message });
   }
@@ -168,24 +174,14 @@ exports.searchByTanggal = async (req, res) => {
   try {
     const { tanggal } = req.query;
 
-    // Di exports.searchByTanggal
-// ...
-const data = await Presensi.findAll({
-  where: {
-    checkIn: {
-      [Op.gte]: `${tanggal} 00:00:00`,
-      [Op.lte]: `${tanggal} 23:59:59`
-    }
-  },
-  // TAMBAHKAN as: 'user'
-  include: [{ model: User, attributes: ["nama", "email"], as: 'user' }]
-});
-// ...
-
-    res.json({
-      message: `Presensi pada tanggal ${tanggal}`,
-      data
+    const data = await Presensi.findAll({
+      where: {
+        checkIn: { [Op.gte]: `${tanggal} 00:00:00`, [Op.lte]: `${tanggal} 23:59:59` },
+      },
+      include: [{ model: User, attributes: ["nama", "email"], as: "user" }],
     });
+
+    res.json({ message: `Presensi pada tanggal ${tanggal}`, data });
   } catch (err) {
     res.status(500).json({ message: "Server error", error: err.message });
   }
@@ -201,19 +197,14 @@ exports.updatePresensi = async (req, res) => {
 
     const record = await Presensi.findByPk(presensiId);
 
-    if (!record) {
-      return res.status(404).json({ message: "Data presensi tidak ditemukan." });
-    }
+    if (!record) return res.status(404).json({ message: "Data presensi tidak ditemukan." });
 
     record.checkIn = checkIn || record.checkIn;
     record.checkOut = checkOut || record.checkOut;
 
     await record.save();
 
-    res.json({
-      message: "Presensi berhasil diperbarui",
-      data: record
-    });
+    res.json({ message: "Presensi berhasil diperbarui", data: record });
   } catch (err) {
     res.status(500).json({ message: "Server error", error: err.message });
   }
@@ -228,9 +219,7 @@ exports.deletePresensi = async (req, res) => {
 
     const record = await Presensi.findByPk(presensiId);
 
-    if (!record) {
-      return res.status(404).json({ message: "Data presensi tidak ditemukan" });
-    }
+    if (!record) return res.status(404).json({ message: "Data presensi tidak ditemukan" });
 
     await record.destroy();
 
