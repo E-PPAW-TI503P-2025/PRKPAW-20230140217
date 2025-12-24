@@ -15,6 +15,8 @@ const presensiRoutes = require("./routes/presensi");
 const reportRoutes = require("./routes/reports");
 const authRoutes = require("./routes/auth");
 const ruteBuku = require("./routes/books");
+const iotRoutes = require("./routes/iot");
+
 
 
 // Middleware
@@ -22,6 +24,7 @@ app.use(cors()); // <-- CUKUP GUNAKAN INI UNTUK MENANGANI CORS DAN OPTIONS
 app.use(express.json());
 app.use(morgan("dev"));
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+app.use("/api/iot", iotRoutes);
 
 app.get("/", (req, res) => {
   res.send("Home Page for API");
